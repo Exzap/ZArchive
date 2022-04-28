@@ -159,8 +159,6 @@ void ZArchiveWriter::StoreBlock(const uint8_t* uncompressedData)
 
 void ZArchiveWriter::AppendData(const void* data, size_t size)
 {
-	if (!m_currentFileNode)
-		return;
 	size_t dataSize = size;
 	const uint8_t* input = (const uint8_t*)data;
 	while (size > 0)
@@ -170,7 +168,7 @@ void ZArchiveWriter::AppendData(const void* data, size_t size)
 			bytesToCopy = size;
 		if (bytesToCopy == _ZARCHIVE::COMPRESSED_BLOCK_SIZE)
 		{
-			// special case where we can compress the incoming data directly and avoid a memcpy to the temporary write buffer
+			// if incoming data is block-aligned we can store it directly without memcpy to temporary buffer
 			StoreBlock(input);
 			input += bytesToCopy;
 			size -= bytesToCopy;
@@ -185,13 +183,15 @@ void ZArchiveWriter::AppendData(const void* data, size_t size)
 			m_currentWriteBuffer.clear();
 		}
 	}
-	m_currentFileNode->fileSize += dataSize;
+	if (m_currentFileNode)
+		m_currentFileNode->fileSize += dataSize;
 	m_currentInputOffset += dataSize;
 }
 
 void ZArchiveWriter::Finalize()
 {
-	// flush file write buffer
+	m_currentFileNode = nullptr; // make sure the padding added below doesn't modify the active file
+	// flush write buffer by padding it to the length of a full block
 	if (!m_currentWriteBuffer.empty())
 	{
 		std::vector<uint8_t> padBuffer;

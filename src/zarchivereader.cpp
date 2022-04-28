@@ -6,20 +6,20 @@
 #include <zstd.h>
 #include <cassert>
 
-uint64_t _ifstream_getFileSize(std::ifstream& file)
+static uint64_t _ifstream_getFileSize(std::ifstream& file)
 {
 	file.seekg(0, std::ios_base::end);
 	return (uint64_t)file.tellg();
 }
 
-bool _ifstream_readBytes(std::ifstream& file, uint64_t offset, void* buffer, uint32_t size)
+static bool _ifstream_readBytes(std::ifstream& file, uint64_t offset, void* buffer, uint32_t size)
 {
 	file.seekg(offset, std::ios_base::beg);
 	file.read((char*)buffer, size);
 	return file.gcount() == size;
 }
 
-uint64_t _getValidElementCount(uint64_t size, uint64_t elementSize)
+static uint64_t _getValidElementCount(uint64_t size, uint64_t elementSize)
 {
 	if ((size % elementSize) != 0)
 		return 0;
