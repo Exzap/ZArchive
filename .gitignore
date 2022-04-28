@@ -1,6 +1,7 @@
-/cmake-build-*/
+cmake-build-*/
 .idea
 
 # Visual Studio
 .vs/
 out/
+CMakeSettings.json
