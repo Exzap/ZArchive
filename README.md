@@ -48,4 +48,4 @@ UTF8 for file and folder paths is theoretically supported as paths are just bina
 Originally this format was created to store Wii U games dumps. These use the file extension .wua (Wii U Archive) but are otherwise regular ZArchive files. To allow multiple Wii U titles to be stored inside a single archive, each title must be placed in a subfolder following the naming scheme: 16-digit titleId followed by \_v and then the version as decimal. For example: 0005000e10102000_v32
 
 ## License
-The ZArchive library is licensed under [MIT No Attribution](https://github.com/emiyl/dumpling/blob/master/LICENSE.md), with the exception of [sha_256.c](/src/sha_256.c) and [sha_256.h](/src/sha_256.h) which are public domain, see: [ https://github.com/amosnier/sha-2]( https://github.com/amosnier/sha-2).
+The ZArchive library is licensed under [MIT No Attribution](https://github.com/Exzap/ZArchive/blob/master/LICENSE), with the exception of [sha_256.c](/src/sha_256.c) and [sha_256.h](/src/sha_256.h) which are public domain, see: [ https://github.com/amosnier/sha-2]( https://github.com/amosnier/sha-2).
