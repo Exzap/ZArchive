@@ -43,3 +43,4 @@ include(GNUInstallDirs)
 
 install(DIRECTORY ${CMAKE_SOURCE_DIR}/include/zarchive/ DESTINATION "include/zarchive" FILES_MATCHING PATTERN "zarchive*.h")
 INSTALL(TARGETS zarchive LIBRARY)
+INSTALL(TARGETS zarchiveTool)
