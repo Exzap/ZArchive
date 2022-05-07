@@ -235,7 +235,7 @@ uint64_t ZArchiveReader::ReadFromFile(ZArchiveNodeHandle nodeHandle, uint64_t of
 	{
 		uint64_t blockIdx = rawReadOffset / _ZARCHIVE::COMPRESSED_BLOCK_SIZE;
 		uint32_t blockOffset = (uint32_t)(rawReadOffset % _ZARCHIVE::COMPRESSED_BLOCK_SIZE);
-		uint32_t stepSize = std::min(remainingBytes, _ZARCHIVE::COMPRESSED_BLOCK_SIZE - blockOffset);
+		uint32_t stepSize = std::min<uint32_t>(remainingBytes, _ZARCHIVE::COMPRESSED_BLOCK_SIZE - blockOffset);
 		CacheBlock* block = GetCachedBlock(blockIdx);
 		if (!block)
 			return 0;
