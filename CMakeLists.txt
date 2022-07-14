@@ -42,4 +42,5 @@ target_link_libraries(zarchiveTool PRIVATE zarchive)
 include(GNUInstallDirs)
 
 install(DIRECTORY ${CMAKE_SOURCE_DIR}/include/zarchive/ DESTINATION "include/zarchive" FILES_MATCHING PATTERN "zarchive*.h")
-INSTALL(TARGETS zarchive DESTINATION lib)
+INSTALL(TARGETS zarchive LIBRARY)
+INSTALL(TARGETS zarchiveTool)
