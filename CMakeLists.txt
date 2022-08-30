@@ -49,6 +49,7 @@ target_link_libraries(zarchiveTool PRIVATE zarchive)
 install(DIRECTORY include/zarchive/ DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/zarchive" FILES_MATCHING PATTERN "zarchive*.h")
 install(TARGETS zarchive)
 install(TARGETS zarchiveTool)
+install(FILES "zarchive.1" TYPE MAN)
 
 # pkg-config
 include(JoinPaths) # can be replaced by cmake_path(APPEND) in CMake 3.20
