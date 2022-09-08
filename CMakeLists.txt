@@ -5,7 +5,7 @@ if (WIN32)
 endif()
 
 project("ZArchive"
-    VERSION "0.1.1"
+    VERSION "0.1.2"
     DESCRIPTION "Library for creating and reading zstd-compressed file archives"
     HOMEPAGE_URL "https://github.com/Exzap/ZArchive"
 )
