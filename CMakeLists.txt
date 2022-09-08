@@ -36,7 +36,7 @@ target_include_directories(zarchive
         $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>
 )
 
-find_package(zstd REQUIRED)
+find_package(zstd MODULE REQUIRED) # MODULE because zstd::zstd is not defined upstream
 target_link_libraries(zarchive PRIVATE zstd::zstd)
 
 # standalone executable
