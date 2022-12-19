@@ -28,6 +28,7 @@ set_target_properties(zarchive PROPERTIES
     MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>"
     VERSION "${PROJECT_VERSION}"
     SOVERSION "${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}"
+    CXX_VISIBILITY_PRESET "hidden"
 )
 
 target_include_directories(zarchive

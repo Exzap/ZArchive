@@ -18,7 +18,7 @@ static inline ZArchiveNodeHandle ZARCHIVE_INVALID_NODE = 0xFFFFFFFF;
 class ZArchiveReader
 {
 public:
-	struct DirEntry
+	struct ZAR_PUB DirEntry
 	{
 		std::string_view name;
 		bool isFile;
@@ -26,21 +26,21 @@ public:
 		uint64_t size; // only valid for directories
 	};
 
-	static ZArchiveReader* OpenFromFile(const std::filesystem::path& path);
+	ZAR_PUB static ZArchiveReader* OpenFromFile(const std::filesystem::path& path);
 
-	~ZArchiveReader();
+	ZAR_PUB ~ZArchiveReader();
 
-	ZArchiveNodeHandle LookUp(std::string_view path, bool allowFile = true, bool allowDirectory = true);
-	bool IsDirectory(ZArchiveNodeHandle nodeHandle) const;
-	bool IsFile(ZArchiveNodeHandle nodeHandle) const;
+	ZAR_PUB ZArchiveNodeHandle LookUp(std::string_view path, bool allowFile = true, bool allowDirectory = true);
+	ZAR_PUB bool IsDirectory(ZArchiveNodeHandle nodeHandle) const;
+	ZAR_PUB bool IsFile(ZArchiveNodeHandle nodeHandle) const;
 
 	// directory operations
-	uint32_t GetDirEntryCount(ZArchiveNodeHandle nodeHandle) const;
-	bool GetDirEntry(ZArchiveNodeHandle nodeHandle, uint32_t index, DirEntry& dirEntry) const;
+	ZAR_PUB uint32_t GetDirEntryCount(ZArchiveNodeHandle nodeHandle) const;
+	ZAR_PUB bool GetDirEntry(ZArchiveNodeHandle nodeHandle, uint32_t index, DirEntry& dirEntry) const;
 
 	// file operations
-	uint64_t GetFileSize(ZArchiveNodeHandle nodeHandle);
-	uint64_t ReadFromFile(ZArchiveNodeHandle nodeHandle, uint64_t offset, uint64_t length, void* buffer);
+	ZAR_PUB uint64_t GetFileSize(ZArchiveNodeHandle nodeHandle);
+	ZAR_PUB uint64_t ReadFromFile(ZArchiveNodeHandle nodeHandle, uint64_t offset, uint64_t length, void* buffer);
 
 private:
 	struct CacheBlock

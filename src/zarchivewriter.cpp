@@ -12,14 +12,17 @@
 #include <cassert>
 #include <algorithm>
 
-ZArchiveWriter::ZArchiveWriter(CB_NewOutputFile cbNewOutputFile, CB_WriteOutputData cbWriteOutputData, void* ctx) : m_cbCtx(ctx), m_cbNewOutputFile(cbNewOutputFile), m_cbWriteOutputData(cbWriteOutputData)
+/* Used to export ZAR_PUB symbols on Windows */
+#define ZAR_IMPLEMENTATION
+
+ZAR_PUB ZArchiveWriter::ZArchiveWriter(CB_NewOutputFile cbNewOutputFile, CB_WriteOutputData cbWriteOutputData, void* ctx) : m_cbCtx(ctx), m_cbNewOutputFile(cbNewOutputFile), m_cbWriteOutputData(cbWriteOutputData)
 {
 	cbNewOutputFile(-1, ctx);
 	m_mainShaCtx = (struct Sha_256*)malloc(sizeof(struct Sha_256));
 	sha_256_init(m_mainShaCtx, m_integritySha);
 };
 
-ZArchiveWriter::~ZArchiveWriter()
+ZAR_PUB ZArchiveWriter::~ZArchiveWriter()
 {
 	free(m_mainShaCtx);
 }
@@ -53,7 +56,7 @@ ZArchiveWriter::PathNode* ZArchiveWriter::FindSubnodeByName(ZArchiveWriter::Path
 	return nullptr;
 }
 
-bool ZArchiveWriter::StartNewFile(const char* path)
+ZAR_PUB bool ZArchiveWriter::StartNewFile(const char* path)
 {
 	m_currentFileNode = nullptr;
 	std::string_view pathParser = path;
@@ -71,7 +74,7 @@ bool ZArchiveWriter::StartNewFile(const char* path)
 	return true;
 }
 
-bool ZArchiveWriter::MakeDir(const char* path, bool recursive)
+ZAR_PUB bool ZArchiveWriter::MakeDir(const char* path, bool recursive)
 {
 	std::string_view pathParser = path;
 	while (!pathParser.empty() && (pathParser.back() == '/' || pathParser.back() == '\\'))
@@ -158,7 +161,7 @@ void ZArchiveWriter::StoreBlock(const uint8_t* uncompressedData)
 	m_numWrittenOffsetRecords++;
 }
 
-void ZArchiveWriter::AppendData(const void* data, size_t size)
+ZAR_PUB void ZArchiveWriter::AppendData(const void* data, size_t size)
 {
 	size_t dataSize = size;
 	const uint8_t* input = (const uint8_t*)data;
@@ -189,7 +192,7 @@ void ZArchiveWriter::AppendData(const void* data, size_t size)
 	m_currentInputOffset += dataSize;
 }
 
-void ZArchiveWriter::Finalize()
+ZAR_PUB void ZArchiveWriter::Finalize()
 {
 	m_currentFileNode = nullptr; // make sure the padding added below doesn't modify the active file
 	// flush write buffer by padding it to the length of a full block
