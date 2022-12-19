@@ -118,7 +118,7 @@ struct PackContext
 	bool hasError{false};
 };
 
-void _pack_NewOutputFile(const int32_t partIndex, void* ctx)
+void _pack_NewOutputFile(const int32_t /*partIndex*/, void* ctx)
 {
 	PackContext* packContext = (PackContext*)ctx;
 	packContext->currentOutputFile = std::ofstream(packContext->outputFilePath, std::ios::binary);
