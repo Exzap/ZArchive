@@ -159,6 +159,9 @@ int Pack(fs::path inputDirectory, fs::path outputFile)
 		}
 		else if (dirEntry.is_regular_file())
 		{
+			if (dirEntry == outputFile) {
+				continue;
+			}
 			printf("Adding %s\n", pathEntry.string().c_str());
 			if (!zWriter.StartNewFile(pathEntry.generic_string().c_str()))
 			{
