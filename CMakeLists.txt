@@ -1,15 +1,33 @@
 ﻿cmake_minimum_required (VERSION 3.15)
 
-if (WIN32)
-    set(VCPKG_TARGET_TRIPLET "x64-windows-static" CACHE STRING "VCPKG Target Triplet to use")
-endif()
-
 project("ZArchive"
-    VERSION "0.1.2"
+    VERSION "0.1.3"
     DESCRIPTION "Library for creating and reading zstd-compressed file archives"
     HOMEPAGE_URL "https://github.com/Exzap/ZArchive"
 )
 
+if (WIN32)
+    option(BUILD_STATIC_TOOL "Build the standalone executable statically" ON)
+elseif(UNIX)
+    option(BUILD_STATIC_TOOL "Build the standalone executable statically" OFF)
+    if (BUILD_STATIC_TOOL)
+        set(CMAKE_EXE_LINKER_FLAGS "-static-libgcc -static-libstdc++")
+    endif()
+endif()
+
+if (BUILD_STATIC_TOOL)
+    message(STATUS "Building standalone executable statically")
+    set(VCPKG_LIBRARY_LINKAGE "static" CACHE STRING "Vcpkg target triplet")
+    set(STATIC_TOOL_FLAG "-static")
+else()
+    message(STATUS "Building standalone executable dynamically")
+    set(VCPKG_LIBRARY_LINKAGE "dynamic" CACHE STRING "Vcpkg target triplet")
+    set(STATIC_TOOL_FLAG "")
+endif()
+
+
+set(CMAKE_FIND_PACKAGE_PREFER_CONFIG TRUE)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake")
 
 include(GNUInstallDirs)
@@ -37,13 +55,13 @@ target_include_directories(zarchive
 )
 
 find_package(zstd MODULE REQUIRED) # MODULE because zstd::zstd is not defined upstream
-target_link_libraries(zarchive PRIVATE zstd::zstd)
+target_link_libraries(zarchive PRIVATE zstd::zstd ${STATIC_TOOL_FLAG})
 
 # standalone executable
 add_executable (zarchiveTool src/main.cpp)
 set_property(TARGET zarchiveTool PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 set_target_properties(zarchiveTool PROPERTIES OUTPUT_NAME "zarchive")
-target_link_libraries(zarchiveTool PRIVATE zarchive)
+target_link_libraries(zarchiveTool PRIVATE zarchive ${STATIC_TOOL_FLAG})
 
 # install
 install(DIRECTORY include/zarchive/ DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/zarchive" FILES_MATCHING PATTERN "zarchive*.h")
