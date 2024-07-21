@@ -2,7 +2,7 @@ name: Build ZArchive
 
 on:
   push:
-    branches: [ $default-branch ]
+    branches: [ master ]
   pull_request:
 
 jobs:
@@ -60,6 +60,7 @@ jobs:
         -DCMAKE_CXX_COMPILER=${{ matrix.cpp_compiler }}
         -DCMAKE_C_COMPILER=${{ matrix.c_compiler }}
         -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+        -DCMAKE_TOOLCHAIN_FILE=/usr/local/share/vcpkg/scripts/buildsystems/vcpkg.cmake
         -DBUILD_STATIC_TOOL=ON
         -S ${{ github.workspace }}
 
@@ -72,8 +73,8 @@ jobs:
         -DCMAKE_CXX_COMPILER=${{ matrix.cpp_compiler }}
         -DCMAKE_C_COMPILER=${{ matrix.c_compiler }}
         -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
-        -DBUILD_STATIC_TOOL=ON
         -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake
+        -DBUILD_STATIC_TOOL=ON
         -S ${{ github.workspace }}
 
     - name: Build
