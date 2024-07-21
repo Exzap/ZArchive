@@ -2,9 +2,8 @@ name: Build ZArchive
 
 on:
   push:
-    branches: [ $default-branch, actions ]
+    branches: [ $default-branch ]
   pull_request:
-    branches: [ $default-branch, actions ]
 
 jobs:
   build:
