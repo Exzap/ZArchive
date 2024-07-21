@@ -1,7 +1,7 @@
 ﻿cmake_minimum_required (VERSION 3.15)
 
 project("ZArchive"
-    VERSION "0.1.2"
+    VERSION "0.1.3"
     DESCRIPTION "Library for creating and reading zstd-compressed file archives"
     HOMEPAGE_URL "https://github.com/Exzap/ZArchive"
 )
