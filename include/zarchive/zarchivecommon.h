@@ -65,6 +65,33 @@
 # endif
 #endif
 
+/* Visibility */
+#if defined _WIN32 || defined __CYGWIN__
+#	ifdef ZAR_SHARED_LIB
+#		ifdef ZAR_IMPLEMENTATION
+#			ifdef __GNUC__
+#				define ZAR_PUB __attribute__ ((dllexport))
+#			else
+#				define ZAR_PUB __declspec(dllexport)
+#			endif
+#		else
+#			ifdef __GNUC__
+#				define ZAR_PUB __attribute__ ((dllimport))
+#			else
+#				define ZAR_PUB __declspec(dllimport)
+#			endif
+#		endif
+#	else
+#		define ZAR_PUB
+#	endif
+#else
+#	if defined(__GNUC__) && __GNUC__ >= 4
+#		define ZAR_PUB __attribute__ ((visibility ("default")))
+#	else
+#		define ZAR_PUB
+#	endif
+#endif
+
 namespace _ZARCHIVE
 {
 	inline constexpr size_t COMPRESSED_BLOCK_SIZE = 64 * 1024; // 64KiB

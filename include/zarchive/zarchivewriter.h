@@ -30,13 +30,13 @@ public:
 	typedef void(*CB_NewOutputFile)(const int32_t partIndex, void* ctx);
 	typedef void(*CB_WriteOutputData)(const void* data, size_t length, void* ctx);
 
-	ZArchiveWriter(CB_NewOutputFile cbNewOutputFile, CB_WriteOutputData cbWriteOutputData, void* ctx);
-	~ZArchiveWriter();
+	ZAR_PUB ZArchiveWriter(CB_NewOutputFile cbNewOutputFile, CB_WriteOutputData cbWriteOutputData, void* ctx);
+	ZAR_PUB ~ZArchiveWriter();
 
-	bool StartNewFile(const char* path); // creates a new virtual file and makes it active
-	void AppendData(const void* data, size_t size); // appends data to currently active file
-	bool MakeDir(const char* path, bool recursive = false);
-	void Finalize();
+	ZAR_PUB bool StartNewFile(const char* path); // creates a new virtual file and makes it active
+	ZAR_PUB void AppendData(const void* data, size_t size); // appends data to currently active file
+	ZAR_PUB bool MakeDir(const char* path, bool recursive = false);
+	ZAR_PUB void Finalize();
 
 private:
 	PathNode* GetNodeByPath(PathNode* root, std::string_view path);

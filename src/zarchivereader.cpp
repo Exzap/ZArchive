@@ -6,6 +6,9 @@
 #include <zstd.h>
 #include <cassert>
 
+/* Used to export ZAR_PUB symbols on Windows */
+#define ZAR_IMPLEMENTATION
+
 static uint64_t _ifstream_getFileSize(std::ifstream& file)
 {
 	file.seekg(0, std::ios_base::end);
@@ -26,7 +29,7 @@ static uint64_t _getValidElementCount(uint64_t size, uint64_t elementSize)
 	return size / elementSize;
 }
 
-ZArchiveReader* ZArchiveReader::OpenFromFile(const std::filesystem::path& path)
+ZAR_PUB ZArchiveReader* ZArchiveReader::OpenFromFile(const std::filesystem::path& path)
 {
 	std::ifstream file;
 	file.open(path, std::ios_base::in | std::ios_base::binary);
@@ -117,12 +120,12 @@ ZArchiveReader::ZArchiveReader(std::ifstream&& file, std::vector<_ZARCHIVE::Comp
 	m_cacheBlocks.back().next = nullptr;
 }
 
-ZArchiveReader::~ZArchiveReader()
+ZAR_PUB ZArchiveReader::~ZArchiveReader()
 {
 
 }
 
-ZArchiveNodeHandle ZArchiveReader::LookUp(std::string_view path, bool allowFile, bool allowDirectory)
+ZAR_PUB ZArchiveNodeHandle ZArchiveReader::LookUp(std::string_view path, bool allowFile, bool allowDirectory)
 {
 	std::string_view pathParser = path;
 	uint32_t currentNode = 0;
@@ -158,21 +161,21 @@ ZArchiveNodeHandle ZArchiveReader::LookUp(std::string_view path, bool allowFile,
 	return ZARCHIVE_INVALID_NODE;
 }
 
-bool ZArchiveReader::IsDirectory(ZArchiveNodeHandle nodeHandle) const
+ZAR_PUB bool ZArchiveReader::IsDirectory(ZArchiveNodeHandle nodeHandle) const
 {
 	if (nodeHandle >= m_fileTree.size())
 		return false;
 	return !m_fileTree[nodeHandle].IsFile();
 }
 
-bool ZArchiveReader::IsFile(ZArchiveNodeHandle nodeHandle) const
+ZAR_PUB bool ZArchiveReader::IsFile(ZArchiveNodeHandle nodeHandle) const
 {
 	if (nodeHandle >= m_fileTree.size())
 		return false;
 	return m_fileTree[nodeHandle].IsFile();
 }
 
-uint32_t ZArchiveReader::GetDirEntryCount(ZArchiveNodeHandle nodeHandle) const
+ZAR_PUB uint32_t ZArchiveReader::GetDirEntryCount(ZArchiveNodeHandle nodeHandle) const
 {
 	if (nodeHandle >= m_fileTree.size())
 		return 0;
@@ -182,7 +185,7 @@ uint32_t ZArchiveReader::GetDirEntryCount(ZArchiveNodeHandle nodeHandle) const
 	return entry.directoryRecord.count;
 }
 
-bool ZArchiveReader::GetDirEntry(ZArchiveNodeHandle nodeHandle, uint32_t index, DirEntry& dirEntry) const
+ZAR_PUB bool ZArchiveReader::GetDirEntry(ZArchiveNodeHandle nodeHandle, uint32_t index, DirEntry& dirEntry) const
 {
 	if (nodeHandle >= m_fileTree.size())
 		return false;
@@ -204,7 +207,7 @@ bool ZArchiveReader::GetDirEntry(ZArchiveNodeHandle nodeHandle, uint32_t index, 
 	return true;
 }
 
-uint64_t ZArchiveReader::GetFileSize(ZArchiveNodeHandle nodeHandle)
+ZAR_PUB uint64_t ZArchiveReader::GetFileSize(ZArchiveNodeHandle nodeHandle)
 {
 	if (nodeHandle >= m_fileTree.size())
 		return 0;
@@ -214,7 +217,7 @@ uint64_t ZArchiveReader::GetFileSize(ZArchiveNodeHandle nodeHandle)
 	return file.GetFileSize();
 }
 
-uint64_t ZArchiveReader::ReadFromFile(ZArchiveNodeHandle nodeHandle, uint64_t offset, uint64_t length, void* buffer)
+ZAR_PUB uint64_t ZArchiveReader::ReadFromFile(ZArchiveNodeHandle nodeHandle, uint64_t offset, uint64_t length, void* buffer)
 {
 	if (nodeHandle >= m_fileTree.size())
 		return 0;
