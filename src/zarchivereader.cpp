@@ -6,17 +6,17 @@
 #include <zstd.h>
 #include <cassert>
 
-static uint64_t _ifstream_getFileSize(std::ifstream& file)
+static uint64_t _istream_getFileSize(std::istream& stream)
 {
-	file.seekg(0, std::ios_base::end);
-	return (uint64_t)file.tellg();
+	stream.seekg(0, std::ios_base::end);
+	return (uint64_t)stream.tellg();
 }
 
-static bool _ifstream_readBytes(std::ifstream& file, uint64_t offset, void* buffer, uint32_t size)
+static bool _istream_readBytes(std::istream& stream, uint64_t offset, void* buffer, uint32_t size)
 {
-	file.seekg(offset, std::ios_base::beg);
-	file.read((char*)buffer, size);
-	return file.gcount() == size;
+	stream.seekg(offset, std::ios_base::beg);
+	stream.read((char*)buffer, size);
+	return stream.gcount() == size;
 }
 
 static uint64_t _getValidElementCount(uint64_t size, uint64_t elementSize)
@@ -28,16 +28,24 @@ static uint64_t _getValidElementCount(uint64_t size, uint64_t elementSize)
 
 ZArchiveReader* ZArchiveReader::OpenFromFile(const std::filesystem::path& path)
 {
-	std::ifstream file;
-	file.open(path, std::ios_base::in | std::ios_base::binary);
-	if (!file.is_open())
+	auto file = std::make_unique<std::ifstream>(path, std::ios_base::in | std::ios_base::binary);
+	if (!file->is_open())
 		return nullptr;
-	uint64_t fileSize = _ifstream_getFileSize(file);
+
+	return ZArchiveReader::OpenFromStream(std::move(file));
+}
+
+ZArchiveReader* ZArchiveReader::OpenFromStream(std::unique_ptr<std::istream>&& stream)
+{
+	if(stream == nullptr)
+		return nullptr;
+
+	uint64_t fileSize = _istream_getFileSize(*stream);
 	if (fileSize <= sizeof(_ZARCHIVE::Footer))
 		return nullptr;
 	// read footer
 	_ZARCHIVE::Footer footer;
-	if (!_ifstream_readBytes(file, fileSize - sizeof(_ZARCHIVE::Footer), &footer, sizeof(_ZARCHIVE::Footer)))
+	if (!_istream_readBytes(*stream, fileSize - sizeof(_ZARCHIVE::Footer), &footer, sizeof(_ZARCHIVE::Footer)))
 		return nullptr;
 	_ZARCHIVE::Footer::Deserialize(&footer, &footer);
 	// validate footer
@@ -63,18 +71,18 @@ ZArchiveReader* ZArchiveReader::OpenFromFile(const std::filesystem::path& path)
 	// read offset records
 	std::vector<_ZARCHIVE::CompressionOffsetRecord> offsetRecords;
 	offsetRecords.resize(_getValidElementCount(footer.sectionOffsetRecords.size, sizeof(_ZARCHIVE::CompressionOffsetRecord)));
-	if (offsetRecords.empty() || !_ifstream_readBytes(file, footer.sectionOffsetRecords.offset, offsetRecords.data(), (uint32_t)(offsetRecords.size() * sizeof(_ZARCHIVE::CompressionOffsetRecord))))
+	if (offsetRecords.empty() || !_istream_readBytes(*stream, footer.sectionOffsetRecords.offset, offsetRecords.data(), (uint32_t)(offsetRecords.size() * sizeof(_ZARCHIVE::CompressionOffsetRecord))))
 		return nullptr;
 	_ZARCHIVE::CompressionOffsetRecord::Deserialize(offsetRecords.data(), offsetRecords.size(), offsetRecords.data());
 	// read name table
 	std::vector<uint8_t> nameTable;
 	nameTable.resize(footer.sectionNames.size);
-	if (!_ifstream_readBytes(file, footer.sectionNames.offset, nameTable.data(), (uint32_t)(nameTable.size() * sizeof(uint8_t))))
+	if (!_istream_readBytes(*stream, footer.sectionNames.offset, nameTable.data(), (uint32_t)(nameTable.size() * sizeof(uint8_t))))
 		return nullptr;
 	// read file tree
 	std::vector<_ZARCHIVE::FileDirectoryEntry> fileTree;
 	fileTree.resize(_getValidElementCount(footer.sectionFileTree.size, sizeof(_ZARCHIVE::FileDirectoryEntry)));
-	if (fileTree.empty() || !_ifstream_readBytes(file, footer.sectionFileTree.offset, fileTree.data(), (uint32_t)(fileTree.size() * sizeof(_ZARCHIVE::FileDirectoryEntry))))
+	if (fileTree.empty() || !_istream_readBytes(*stream, footer.sectionFileTree.offset, fileTree.data(), (uint32_t)(fileTree.size() * sizeof(_ZARCHIVE::FileDirectoryEntry))))
 		return nullptr;
 	_ZARCHIVE::FileDirectoryEntry::Deserialize(fileTree.data(), fileTree.size(), fileTree.data());
 	// verify file tree
@@ -86,12 +94,12 @@ ZArchiveReader* ZArchiveReader::OpenFromFile(const std::filesystem::path& path)
 	// read meta data
 	// todo
 
-	ZArchiveReader* cfs = new ZArchiveReader(std::move(file), std::move(offsetRecords), std::move(nameTable), std::move(fileTree), footer.sectionCompressedData.offset, footer.sectionCompressedData.size);
+	ZArchiveReader* cfs = new ZArchiveReader(std::move(stream), std::move(offsetRecords), std::move(nameTable), std::move(fileTree), footer.sectionCompressedData.offset, footer.sectionCompressedData.size);
 	return cfs;
 }
 
-ZArchiveReader::ZArchiveReader(std::ifstream&& file, std::vector<_ZARCHIVE::CompressionOffsetRecord>&& offsetRecords, std::vector<uint8_t>&& nameTable, std::vector<_ZARCHIVE::FileDirectoryEntry>&& fileTree, uint64_t compressedDataOffset, uint64_t compressedDataSize) :
-	m_file(std::move(file)), m_offsetRecords(std::move(offsetRecords)), m_nameTable(std::move(nameTable)), m_fileTree(std::move(fileTree)),
+ZArchiveReader::ZArchiveReader(std::unique_ptr<std::istream>&& stream, std::vector<_ZARCHIVE::CompressionOffsetRecord>&& offsetRecords, std::vector<uint8_t>&& nameTable, std::vector<_ZARCHIVE::FileDirectoryEntry>&& fileTree, uint64_t compressedDataOffset, uint64_t compressedDataSize) :
+	m_stream(std::move(stream)), m_offsetRecords(std::move(offsetRecords)), m_nameTable(std::move(nameTable)), m_fileTree(std::move(fileTree)),
 	m_compressedDataOffset(compressedDataOffset), m_compressedDataSize(compressedDataSize)
 {
 	m_blockCount = (uint64_t)m_offsetRecords.size() * _ZARCHIVE::ENTRIES_PER_OFFSETRECORD;
@@ -338,9 +346,9 @@ bool ZArchiveReader::LoadBlock(CacheBlock* block)
 	if (compressedSize == _ZARCHIVE::COMPRESSED_BLOCK_SIZE)
 	{
 		// uncompressed block, read directly into cached block
-		return _ifstream_readBytes(m_file, offset, block->data, compressedSize);
+		return _istream_readBytes(*m_stream, offset, block->data, compressedSize);
 	}
-	if (!_ifstream_readBytes(m_file, offset, m_blockDecompressionBuffer.data(), compressedSize))
+	if (!_istream_readBytes(*m_stream, offset, m_blockDecompressionBuffer.data(), compressedSize))
 		return false;
 	// decompress
 	size_t outputSize = ZSTD_decompress(block->data, _ZARCHIVE::COMPRESSED_BLOCK_SIZE, m_blockDecompressionBuffer.data(), compressedSize);

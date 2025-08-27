@@ -1,13 +1,14 @@
 #pragma once
 
 #include <cstdint>
+#include <memory>
 #include <vector>
 #include <string_view>
 #include <unordered_map>
 #include <mutex>
 
 #include <filesystem>
-#include <fstream>
+#include <istream>
 
 #include "zarchivecommon.h"
 
@@ -27,6 +28,7 @@ public:
 	};
 
 	static ZArchiveReader* OpenFromFile(const std::filesystem::path& path);
+	static ZArchiveReader* OpenFromStream(std::unique_ptr<std::istream>&& stream);
 
 	~ZArchiveReader();
 
@@ -60,7 +62,7 @@ private:
 	CacheBlock* m_lruChainLast;
 	std::unordered_map<uint64_t, CacheBlock*> m_blockLookup;
 
-	ZArchiveReader(std::ifstream&& file, std::vector<_ZARCHIVE::CompressionOffsetRecord>&& offsetRecords, std::vector<uint8_t>&& nameTable, std::vector<_ZARCHIVE::FileDirectoryEntry>&& fileTree, uint64_t compressedDataOffset, uint64_t compressedDataSize);
+	ZArchiveReader(std::unique_ptr<std::istream>&& stream, std::vector<_ZARCHIVE::CompressionOffsetRecord>&& offsetRecords, std::vector<uint8_t>&& nameTable, std::vector<_ZARCHIVE::FileDirectoryEntry>&& fileTree, uint64_t compressedDataOffset, uint64_t compressedDataSize);
 
 	CacheBlock* GetCachedBlock(uint64_t blockIndex);
 	CacheBlock* RecycleLRUBlock(uint64_t newBlockIndex);
@@ -72,7 +74,7 @@ private:
 
 	static std::string_view GetName(const std::vector<uint8_t>& nameTable, uint32_t nameOffset);
 
-	std::ifstream m_file;
+	std::unique_ptr<std::istream> m_stream;
 	std::vector<_ZARCHIVE::CompressionOffsetRecord> m_offsetRecords;
 	std::vector<uint8_t> m_nameTable;
 	std::vector<_ZARCHIVE::FileDirectoryEntry> m_fileTree;
