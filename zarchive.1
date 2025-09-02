@@ -1,0 +1,46 @@
+.\" SPDX-FileCopyrightText: 2022 Andrea Pappacoda <andrea@pappacoda.it>
+.\" SPDX-License-Identifier: ISC
+.Dd 2022-08-30
+.Dt ZARCHIVE 1
+.Os
+.
+.Sh NAME
+.Nm zarchive
+.Nd create and read zstd-compressed file archives
+.
+.Sh SYNOPSIS
+.Nm
+.Ar input_path
+.Op Ar output_path
+.
+.Sh DESCRIPTION
+.Nm
+allows you to create and read file archives in the ZArchive format (.zar).
+.Pp
+ZArchive is yet another file archive format. Think of zip, tar, 7z, etc. but
+with the requirement of allowing random-access reads and supporting compression.
+.Sh EXIT STATUS
+.Ex -std
+.
+.Sh EXAMPLES
+.Bd -literal
+$ zarchive src
+Outputting to: src.zar
+Adding main.cpp
+Adding zarchivereader.cpp
+Adding zarchivewriter.cpp
+Adding sha_256.c
+Adding sha_256.h
+.Ed
+.
+.Sh SEE ALSO
+.Xr zstd 1
+.
+.Sh AUTHORS
+.An -nosplit
+The ZArchive format, library and tool were written by
+.An Exzap .
+The
+.Nm
+manual page was written by
+.An Andrea Pappacoda Aq Mt andrea@pappacoda.it .
