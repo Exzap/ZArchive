@@ -6,6 +6,11 @@ project("ZArchive"
     HOMEPAGE_URL "https://github.com/Exzap/ZArchive"
 )
 
+# Default to an optimized build. Without a build type single-configuration generators (Makefiles, Ninja) compile without any optimization
+if (NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+    set(CMAKE_BUILD_TYPE "Release" CACHE STRING "Choose the type of build" FORCE)
+endif()
+
 if (WIN32)
     option(BUILD_STATIC_TOOL "Build the standalone executable statically" ON)
 elseif(UNIX)
@@ -18,7 +23,13 @@ endif()
 if (BUILD_STATIC_TOOL)
     message(STATUS "Building standalone executable statically")
     set(VCPKG_LIBRARY_LINKAGE "static" CACHE STRING "Vcpkg target triplet")
-    set(STATIC_TOOL_FLAG "-static")
+    if (MSVC)
+        # The MSVC linker doesn't understand -static (warning LNK4044). The tool is linked statically anyway through
+        # the static runtime (MSVC_RUNTIME_LIBRARY MultiThreaded) and the static vcpkg libraries
+        set(STATIC_TOOL_FLAG "")
+    else()
+        set(STATIC_TOOL_FLAG "-static")
+    endif()
 else()
     message(STATUS "Building standalone executable dynamically")
     set(VCPKG_LIBRARY_LINKAGE "dynamic" CACHE STRING "Vcpkg target triplet")
@@ -55,7 +66,8 @@ target_include_directories(zarchive
 )
 
 find_package(zstd MODULE REQUIRED) # MODULE because zstd::zstd is not defined upstream
-target_link_libraries(zarchive PRIVATE zstd::zstd ${STATIC_TOOL_FLAG})
+find_package(Threads REQUIRED) # used for multi-threaded compression
+target_link_libraries(zarchive PRIVATE zstd::zstd Threads::Threads ${STATIC_TOOL_FLAG})
 
 # standalone executable
 add_executable (zarchiveTool src/main.cpp)
