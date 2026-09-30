@@ -41,6 +41,15 @@ For a more detailed example see [main.cpp](/src/main.cpp)
 ## No-seek creation
 When creating new archives only byte append operations are used. No file seeking is necessary. This makes it possible to create archives on storage which is write-once. It also simplifies streaming ZArchive creation over network.
 
+## Multi-threaded creation
+`ZArchiveWriter` compresses blocks on multiple threads by default. The resulting archive is byte-identical regardless of the number of threads. Use `SetThreadCount(n)` to change this (`1` compresses on the calling thread only). Output callbacks are always invoked from the thread calling `AppendData()`/`Finalize()`, but with more than one thread the data is delivered in batches. The command line tool accepts `-j N` when creating archives.
+
+## Compression level
+The default zstd level is 6. `SetCompressionLevel(n)` (or `-l N` in the command line tool) trades creation time for archive size. Every ZArchive reader can read archives created with any level and reading speed is not noticeably affected by it. Because every 64KiB block is compressed on its own, high levels give comparatively small gains for a large increase in creation time, so it is worth comparing e.g. levels 6, 12 and 19 on a sample of your own data before using a high level on a large archive.
+
+## Progress bar
+When run in an interactive terminal the command line tool shows a progress bar (percentage, processed size, speed and remaining time) when creating and extracting archives. If the output is redirected, or with `--no-progress`, it prints one line per file instead.
+
 ## UTF8 paths
 UTF8 for file and folder paths is theoretically supported as paths are just binary blobs. But the case-insensitive comparison only applies to latin letters (a-z).
 

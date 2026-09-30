@@ -1,5 +1,20 @@
 #include "sha_256.h"
 
+/*
+ * Optional hardware-accelerated path using the x86 SHA extensions (SHA-NI). It is selected at runtime via CPUID,
+ * so the same binary still runs on CPUs without it (the portable implementation below is used as fallback).
+ * Define SHA256_DISABLE_SHANI to compile it out.
+ */
+#if !defined(SHA256_DISABLE_SHANI) && (defined(__x86_64__) || defined(_M_X64)) && (defined(__GNUC__) || defined(__clang__) || defined(_MSC_VER))
+#define SHA256_HAVE_SHANI_PATH 1
+#include <immintrin.h>
+#if defined(_MSC_VER)
+#include <intrin.h>
+#else
+#include <cpuid.h>
+#endif
+#endif
+
 #define TOTAL_LEN_LEN 8
 
 /* Original code by amosnier. Tweaked for extra performance */
@@ -121,6 +136,130 @@ static inline void consume_chunk(uint32_t *h, const uint8_t *p)
 		h[i] += ah[i];
 }
 
+#ifdef SHA256_HAVE_SHANI_PATH
+
+#if defined(__GNUC__) || defined(__clang__)
+#define SHA256_SHANI_TARGET __attribute__((target("sha,sse4.1,ssse3")))
+#else
+#define SHA256_SHANI_TARGET
+#endif
+
+static int sha256_shani_supported(void)
+{
+	static int cached = -1; /* benign race: every thread computes the same value */
+	int v = cached;
+	if (v >= 0)
+		return v;
+	v = 0;
+#if defined(_MSC_VER)
+	{
+		int r[4];
+		__cpuid(r, 0);
+		if (r[0] >= 7) {
+			__cpuid(r, 1);
+			const int ssse3 = (r[2] >> 9) & 1;
+			const int sse41 = (r[2] >> 19) & 1;
+			__cpuidex(r, 7, 0);
+			v = ssse3 && sse41 && ((r[1] >> 29) & 1);
+		}
+	}
+#else
+	{
+		unsigned a, b, c, d;
+		if (__get_cpuid(0, &a, &b, &c, &d) && a >= 7) {
+			__get_cpuid(1, &a, &b, &c, &d);
+			const int ssse3 = (c >> 9) & 1;
+			const int sse41 = (c >> 19) & 1;
+			__cpuid_count(7, 0, a, b, c, d);
+			v = ssse3 && sse41 && ((b >> 29) & 1);
+		}
+	}
+#endif
+	cached = v;
+	return v;
+}
+
+/* message schedule for the next four words: W[t] = f(W[t-16..t-1]), a..d are the previous four 4-word groups (oldest first) */
+#define SHA256_SCHED(a, b, c, d) _mm_sha256msg2_epu32(_mm_add_epi32(_mm_sha256msg1_epu32((a), (b)), _mm_alignr_epi8((d), (c), 4)), (d))
+/* four rounds using message words w and round constants k[4*i .. 4*i+3] */
+#define SHA256_QROUND(w, i) do { \
+		__m128i m_ = _mm_add_epi32((w), _mm_loadu_si128((const __m128i*)(_sha256_k + 4 * (i)))); \
+		state1 = _mm_sha256rnds2_epu32(state1, state0, m_); \
+		m_ = _mm_shuffle_epi32(m_, 0x0E); \
+		state0 = _mm_sha256rnds2_epu32(state0, state1, m_); \
+	} while (0)
+
+SHA256_SHANI_TARGET
+static void consume_blocks_shani(uint32_t *h, const uint8_t *p, size_t nblocks)
+{
+	const __m128i bswap_mask = _mm_set_epi64x(0x0c0d0e0f08090a0bULL, 0x0405060700010203ULL);
+	__m128i tmp = _mm_loadu_si128((const __m128i*)&h[0]);
+	__m128i state1 = _mm_loadu_si128((const __m128i*)&h[4]);
+	__m128i state0;
+	tmp = _mm_shuffle_epi32(tmp, 0xB1);          /* CDAB */
+	state1 = _mm_shuffle_epi32(state1, 0x1B);    /* EFGH */
+	state0 = _mm_alignr_epi8(tmp, state1, 8);    /* ABEF */
+	state1 = _mm_blend_epi16(state1, tmp, 0xF0); /* CDGH */
+
+	while (nblocks--) {
+		const __m128i abef_save = state0;
+		const __m128i cdgh_save = state1;
+		__m128i w0 = _mm_shuffle_epi8(_mm_loadu_si128((const __m128i*)(p + 0)), bswap_mask);
+		__m128i w1 = _mm_shuffle_epi8(_mm_loadu_si128((const __m128i*)(p + 16)), bswap_mask);
+		__m128i w2 = _mm_shuffle_epi8(_mm_loadu_si128((const __m128i*)(p + 32)), bswap_mask);
+		__m128i w3 = _mm_shuffle_epi8(_mm_loadu_si128((const __m128i*)(p + 48)), bswap_mask);
+
+		SHA256_QROUND(w0, 0);
+		SHA256_QROUND(w1, 1);
+		SHA256_QROUND(w2, 2);
+		SHA256_QROUND(w3, 3);
+		w0 = SHA256_SCHED(w0, w1, w2, w3); SHA256_QROUND(w0, 4);
+		w1 = SHA256_SCHED(w1, w2, w3, w0); SHA256_QROUND(w1, 5);
+		w2 = SHA256_SCHED(w2, w3, w0, w1); SHA256_QROUND(w2, 6);
+		w3 = SHA256_SCHED(w3, w0, w1, w2); SHA256_QROUND(w3, 7);
+		w0 = SHA256_SCHED(w0, w1, w2, w3); SHA256_QROUND(w0, 8);
+		w1 = SHA256_SCHED(w1, w2, w3, w0); SHA256_QROUND(w1, 9);
+		w2 = SHA256_SCHED(w2, w3, w0, w1); SHA256_QROUND(w2, 10);
+		w3 = SHA256_SCHED(w3, w0, w1, w2); SHA256_QROUND(w3, 11);
+		w0 = SHA256_SCHED(w0, w1, w2, w3); SHA256_QROUND(w0, 12);
+		w1 = SHA256_SCHED(w1, w2, w3, w0); SHA256_QROUND(w1, 13);
+		w2 = SHA256_SCHED(w2, w3, w0, w1); SHA256_QROUND(w2, 14);
+		w3 = SHA256_SCHED(w3, w0, w1, w2); SHA256_QROUND(w3, 15);
+
+		state0 = _mm_add_epi32(state0, abef_save);
+		state1 = _mm_add_epi32(state1, cdgh_save);
+		p += SIZE_OF_SHA_256_CHUNK;
+	}
+
+	tmp = _mm_shuffle_epi32(state0, 0x1B);       /* FEBA */
+	state1 = _mm_shuffle_epi32(state1, 0xB1);    /* DCHG */
+	state0 = _mm_blend_epi16(tmp, state1, 0xF0); /* DCBA */
+	state1 = _mm_alignr_epi8(state1, tmp, 8);    /* HGFE */
+	_mm_storeu_si128((__m128i*)&h[0], state0);
+	_mm_storeu_si128((__m128i*)&h[4], state1);
+}
+
+#undef SHA256_SCHED
+#undef SHA256_QROUND
+#endif /* SHA256_HAVE_SHANI_PATH */
+
+/*
+ * @brief Process nblocks consecutive 64 byte chunks. Uses the SHA extensions if the CPU supports them.
+ */
+static void consume_blocks(uint32_t *h, const uint8_t *p, size_t nblocks)
+{
+#ifdef SHA256_HAVE_SHANI_PATH
+	if (sha256_shani_supported()) {
+		consume_blocks_shani(h, p, nblocks);
+		return;
+	}
+#endif
+	while (nblocks--) {
+		consume_chunk(h, p);
+		p += SIZE_OF_SHA_256_CHUNK;
+	}
+}
+
 /*
  * Public functions. See header file for documentation.
  */
@@ -157,9 +296,10 @@ void sha_256_write(struct Sha_256 *sha_256, const void *data, size_t len)
 		 * necessary. We operate directly on the input data instead.
 		 */
 		if (sha_256->space_left == SIZE_OF_SHA_256_CHUNK && len >= SIZE_OF_SHA_256_CHUNK) {
-			consume_chunk(sha_256->h, p);
-			len -= SIZE_OF_SHA_256_CHUNK;
-			p += SIZE_OF_SHA_256_CHUNK;
+			const size_t nblocks = len / SIZE_OF_SHA_256_CHUNK;
+			consume_blocks(sha_256->h, p, nblocks);
+			len -= nblocks * SIZE_OF_SHA_256_CHUNK;
+			p += nblocks * SIZE_OF_SHA_256_CHUNK;
 			continue;
 		}
 		/* General case, no particular optimization. */
@@ -169,7 +309,7 @@ void sha_256_write(struct Sha_256 *sha_256, const void *data, size_t len)
 		len -= consumed_len;
 		p += consumed_len;
 		if (sha_256->space_left == 0) {
-			consume_chunk(sha_256->h, sha_256->chunk);
+			consume_blocks(sha_256->h, sha_256->chunk, 1);
 			sha_256->chunk_pos = sha_256->chunk;
 			sha_256->space_left = SIZE_OF_SHA_256_CHUNK;
 		} else {
@@ -198,7 +338,7 @@ uint8_t *sha_256_close(struct Sha_256 *sha_256)
 	 */
 	if (space_left < TOTAL_LEN_LEN) {
 		memset(pos, 0x00, space_left);
-		consume_chunk(h, sha_256->chunk);
+		consume_blocks(h, sha_256->chunk, 1);
 		pos = sha_256->chunk;
 		space_left = SIZE_OF_SHA_256_CHUNK;
 	}
@@ -213,7 +353,7 @@ uint8_t *sha_256_close(struct Sha_256 *sha_256)
 		pos[i] = (uint8_t)len;
 		len >>= 8;
 	}
-	consume_chunk(h, sha_256->chunk);
+	consume_blocks(h, sha_256->chunk, 1);
 	/* Produce the final hash value (big-endian): */
 	int j;
 	uint8_t *const hash = sha_256->hash;

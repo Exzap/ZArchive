@@ -12,6 +12,8 @@
 
 #include "zarchivecommon.h"
 
+struct ZSTD_DCtx_s; // zstd decompression context (defined in zstd.h)
+
 using ZArchiveNodeHandle = uint32_t;
 
 static inline ZArchiveNodeHandle ZARCHIVE_INVALID_NODE = 0xFFFFFFFF;
@@ -83,4 +85,5 @@ private:
 	uint64_t m_blockCount;
 
 	std::vector<uint8_t> m_blockDecompressionBuffer;
+	ZSTD_DCtx_s* m_dctx{ nullptr }; // reused for every block, allocating a new zstd context per block is expensive
 };

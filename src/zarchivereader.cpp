@@ -5,6 +5,7 @@
 
 #include <zstd.h>
 #include <cassert>
+#include <algorithm>
 
 static uint64_t _istream_getFileSize(std::istream& stream)
 {
@@ -104,6 +105,7 @@ ZArchiveReader::ZArchiveReader(std::unique_ptr<std::istream>&& stream, std::vect
 {
 	m_blockCount = (uint64_t)m_offsetRecords.size() * _ZARCHIVE::ENTRIES_PER_OFFSETRECORD;
 	m_blockDecompressionBuffer.resize(_ZARCHIVE::COMPRESSED_BLOCK_SIZE);
+	m_dctx = ZSTD_createDCtx(); // if this fails (out of memory) LoadBlock() falls back to the one-shot API
 	// init cache
 	uint64_t cacheSize = 1024 * 1024 * 4; // 4MiB
 	if ((cacheSize % _ZARCHIVE::COMPRESSED_BLOCK_SIZE) != 0)
@@ -127,7 +129,8 @@ ZArchiveReader::ZArchiveReader(std::unique_ptr<std::istream>&& stream, std::vect
 
 ZArchiveReader::~ZArchiveReader()
 {
-
+	if (m_dctx)
+		ZSTD_freeDCtx(m_dctx);
 }
 
 ZArchiveNodeHandle ZArchiveReader::LookUp(std::string_view path, bool allowFile, bool allowDirectory)
@@ -139,29 +142,35 @@ ZArchiveNodeHandle ZArchiveReader::LookUp(std::string_view path, bool allowFile,
 		std::string_view pathNodeName;
 		if (!_ZARCHIVE::GetNextPathNode(pathParser, pathNodeName))
 			return (ZArchiveNodeHandle)currentNode; // end of path reached
-		_ZARCHIVE::FileDirectoryEntry& entry = m_fileTree.at(currentNode);
+		if (currentNode >= m_fileTree.size())
+			return ZARCHIVE_INVALID_NODE;
+		const _ZARCHIVE::FileDirectoryEntry& entry = m_fileTree[currentNode];
 		if (entry.IsFile())
 			return ZARCHIVE_INVALID_NODE; // trying to iterate a file
-		// linear scan
-		// todo - we could accelerate this if we use binary search
-		uint32_t currentIndex = entry.directoryRecord.nodeStartIndex;
-		uint32_t endIndex = entry.directoryRecord.nodeStartIndex + entry.directoryRecord.count;
-		_ZARCHIVE::FileDirectoryEntry* match = nullptr;
-		while (currentIndex < endIndex)
+		// The entries of a directory are sorted by _ZARCHIVE::CompareNodeName (see ZArchiveWriter::WriteFileTree) so we can use binary search
+		uint64_t low = entry.directoryRecord.nodeStartIndex;
+		uint64_t high = low + (uint64_t)entry.directoryRecord.count; // exclusive
+		if (high > m_fileTree.size())
+			return ZARCHIVE_INVALID_NODE; // corrupted directory record
+		uint32_t match = ZARCHIVE_INVALID_NODE;
+		while (low < high)
 		{
-			_ZARCHIVE::FileDirectoryEntry& it = m_fileTree.at(currentIndex);
-			std::string_view itName = GetName(m_nameTable, it.GetNameOffset());
-			if (_ZARCHIVE::CompareNodeNameBool(pathNodeName, itName))
+			uint64_t mid = low + (high - low) / 2;
+			std::string_view midName = GetName(m_nameTable, m_fileTree[mid].GetNameOffset());
+			int cmp = _ZARCHIVE::CompareNodeName(pathNodeName, midName);
+			if (cmp == 0)
 			{
-				match = &it;
+				match = (uint32_t)mid;
 				break;
 			}
-			currentIndex++;
-			continue;
+			if (cmp > 0)
+				high = mid; // sorts before midName
+			else
+				low = mid + 1;
 		}
-		if (!match)
+		if (match == ZARCHIVE_INVALID_NODE)
 			return ZARCHIVE_INVALID_NODE; // path not found
-		currentNode = (uint32_t)(match - m_fileTree.data());
+		currentNode = match;
 	}
 	return ZARCHIVE_INVALID_NODE;
 }
@@ -199,7 +208,10 @@ bool ZArchiveReader::GetDirEntry(ZArchiveNodeHandle nodeHandle, uint32_t index, 
 		return false;
 	if (index >= dir.directoryRecord.count)
 		return false;
-	auto& it = m_fileTree.at(dir.directoryRecord.nodeStartIndex + index);
+	uint64_t entryIndex = (uint64_t)dir.directoryRecord.nodeStartIndex + index;
+	if (entryIndex >= m_fileTree.size())
+		return false; // corrupted directory record
+	auto& it = m_fileTree[entryIndex];
 	dirEntry.isFile = it.IsFile();
 	dirEntry.isDirectory = !dirEntry.isFile;
 	if (dirEntry.isFile)
@@ -243,7 +255,7 @@ uint64_t ZArchiveReader::ReadFromFile(ZArchiveNodeHandle nodeHandle, uint64_t of
 	{
 		uint64_t blockIdx = rawReadOffset / _ZARCHIVE::COMPRESSED_BLOCK_SIZE;
 		uint32_t blockOffset = (uint32_t)(rawReadOffset % _ZARCHIVE::COMPRESSED_BLOCK_SIZE);
-		uint32_t stepSize = std::min<uint32_t>(remainingBytes, _ZARCHIVE::COMPRESSED_BLOCK_SIZE - blockOffset);
+		uint32_t stepSize = (uint32_t)std::min<uint64_t>(remainingBytes, _ZARCHIVE::COMPRESSED_BLOCK_SIZE - blockOffset);
 		CacheBlock* block = GetCachedBlock(blockIdx);
 		if (!block)
 			return 0;
@@ -351,14 +363,18 @@ bool ZArchiveReader::LoadBlock(CacheBlock* block)
 	if (!_istream_readBytes(*m_stream, offset, m_blockDecompressionBuffer.data(), compressedSize))
 		return false;
 	// decompress
-	size_t outputSize = ZSTD_decompress(block->data, _ZARCHIVE::COMPRESSED_BLOCK_SIZE, m_blockDecompressionBuffer.data(), compressedSize);
+	size_t outputSize;
+	if (m_dctx)
+		outputSize = ZSTD_decompressDCtx(m_dctx, block->data, _ZARCHIVE::COMPRESSED_BLOCK_SIZE, m_blockDecompressionBuffer.data(), compressedSize);
+	else
+		outputSize = ZSTD_decompress(block->data, _ZARCHIVE::COMPRESSED_BLOCK_SIZE, m_blockDecompressionBuffer.data(), compressedSize);
 	return outputSize == _ZARCHIVE::COMPRESSED_BLOCK_SIZE;
 }
 
 // returns empty view on failure
 std::string_view ZArchiveReader::GetName(const std::vector<uint8_t>& nameTable, uint32_t nameOffset)
 {
-	if (nameOffset == 0x7FFFFFFF || nameOffset > nameTable.size())
+	if (nameOffset == 0x7FFFFFFF || nameOffset >= nameTable.size())
 		return "";
 	// parse header
 	uint16_t nameLength = nameTable[nameOffset] & 0x7F;
@@ -367,7 +383,7 @@ std::string_view ZArchiveReader::GetName(const std::vector<uint8_t>& nameTable, 
 		// extended 2-byte length
 		if (nameOffset + 1 >= nameTable.size())
 			return "";
-		nameLength |= ((uint16_t)nameTable[nameOffset] << 7);
+		nameLength |= ((uint16_t)nameTable[nameOffset + 1] << 7);
 		nameOffset += 2;
 	}
 	else
