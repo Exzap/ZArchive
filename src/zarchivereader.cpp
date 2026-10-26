@@ -358,7 +358,7 @@ bool ZArchiveReader::LoadBlock(CacheBlock* block)
 // returns empty view on failure
 std::string_view ZArchiveReader::GetName(const std::vector<uint8_t>& nameTable, uint32_t nameOffset)
 {
-	if (nameOffset == 0x7FFFFFFF || nameOffset > nameTable.size())
+	if (nameOffset == 0x7FFFFFFF || nameOffset >= nameTable.size())
 		return "";
 	// parse header
 	uint16_t nameLength = nameTable[nameOffset] & 0x7F;
@@ -367,7 +367,7 @@ std::string_view ZArchiveReader::GetName(const std::vector<uint8_t>& nameTable, 
 		// extended 2-byte length
 		if (nameOffset + 1 >= nameTable.size())
 			return "";
-		nameLength |= ((uint16_t)nameTable[nameOffset] << 7);
+		nameLength |= ((uint16_t)nameTable[nameOffset + 1] << 7);
 		nameOffset += 2;
 	}
 	else
